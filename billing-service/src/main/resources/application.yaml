@@ -1,0 +1,61 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: billing-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/yuu_saas}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    # baseline-version 0, bukan default 1: V1 harus tetap dijalankan supaya lingkungan
+    # baru benar-benar mendapat tabelnya. Di database yang sudah ada, V1 idempoten dan
+    # jadi no-op.
+    baseline-version: 0
+    # Tabel riwayat sendiri: service lain memakai database yang sama.
+    table: flyway_schema_history_billing
+
+  jpa:
+    hibernate:
+      # validate: skema service ini kini dikelola V1. Lihat catatan yang sama di
+      # auth-service — `update` di database bersama membuat satu service bisa
+      # mengubah tabel milik service lain.
+      ddl-auto: validate
+    show-sql: true
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+
+jwt:
+  # Tanpa default: semua service harus memakai secret yang sama dengan auth-service.
+  secret: ${JWT_SECRET}
+
+xendit:
+  base-url: ${XENDIT_BASE_URL:https://api.xendit.co}
+  api-key: ${XENDIT_API_KEY}
+  callback-token: ${XENDIT_CALLBACK_TOKEN}
+
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  auth-service-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  # Shared secret untuk POST /api/v1/notifications/internal di auth-service.
+  internal-token: ${NOTIFICATION_INTERNAL_TOKEN}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+logging:
+  pattern:
+    # %X{requestId} mengambil nilai yang dipasang RequestIdFilter. Tanpa ini id-nya
+    # ada di MDC tapi tidak pernah muncul di log, jadi tidak menolong siapa pun.
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"

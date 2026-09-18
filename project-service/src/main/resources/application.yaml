@@ -1,0 +1,47 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: project-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/yuu_saas}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      # validate, bukan update. Semua tabel service ini dibuat migrasi Flyway milik
+      # auth-service (V3, V7, V8). Hibernate tidak boleh mengubahnya diam-diam: lima
+      # service menulis ke database yang sama, jadi `update` membuat satu service bisa
+      # mengubah tabel milik service lain tanpa ada yang memintanya.
+      #
+      # Service ini sengaja TIDAK memakai Flyway: ia tidak memiliki satu pun migrasi.
+      # Perubahan skema untuk tabelnya ditulis di auth-service, yang memang pemiliknya.
+      ddl-auto: validate
+    show-sql: true
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+
+jwt:
+  # Tanpa default: default yang berbeda antar service bikin token auth-service tidak
+  # bisa divalidasi di sini, dan bug itu hanya muncul saat JWT_SECRET lupa di-set.
+  secret: ${JWT_SECRET}
+
+app:
+  file-upload-dir: ./uploads
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+logging:
+  pattern:
+    # %X{requestId} mengambil nilai yang dipasang RequestIdFilter. Tanpa ini id-nya
+    # ada di MDC tapi tidak pernah muncul di log, jadi tidak menolong siapa pun.
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"

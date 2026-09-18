@@ -1,0 +1,29 @@
+Flow
+.env
+
+# Service logs — runtime output, not source. These churn on every run and
+# leaked request/response bodies into the repo.
+*.log
+
+# Build output
+target/
+node_modules/
+dist/
+
+# AI session transcripts — not source, and they quote .env verbatim.
+Sessions this projek.md
+sessiond*.md
+
+# Izin per-mesin. Isinya perintah verbatim yang pernah dijalankan, termasuk
+# JWT_SECRET, kunci Xendit, dan password SMTP sebagai teks biasa. Saat ini hanya
+# terlindung oleh ~/.config/git/ignore, yang tidak ikut saat repo di-clone.
+.claude/settings.local.json
+
+# Keluaran Playwright MCP: snapshot, screenshot, log konsol. Dibatasi ke root
+# dan folder MCP saja — pola *.png global akan ikut memblokir aset frontend.
+.playwright-mcp/
+/*.png
+
+# Cache Python dari tools/
+__pycache__/
+*.pyc

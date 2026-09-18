@@ -1,0 +1,141 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  # Unggahan gambar diizinkan sampai 2MB oleh auth-service, tapi batas codec
+  # bawaan WebFlux adalah 256KB — hampir semua foto kamera lebih besar dari itu.
+  # Disamakan dengan max-request-size auth-service supaya batasnya ditegakkan di
+  # satu tempat, bukan dua tempat yang diam-diam berbeda.
+  codec:
+    max-in-memory-size: 3MB
+
+  cloud:
+    gateway:
+      corsConfigurations:
+        '[/**]':
+          # Satu sumber dengan auth-service (cors.allowed-origins), diisi dari
+          # CORS_ALLOWED_ORIGINS. Daftar hardcoded sebelumnya membuat ngrok dan
+          # domain deploy tidak pernah ikut walau sudah ada di .env.
+          allowedOrigins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+          allowCredentials: true
+          allowedMethods:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          allowedHeaders: "*"
+      routes:
+        # Spesifikasi OpenAPI tiap service, diteruskan supaya Swagger UI di port ini
+        # bisa mengambilnya tanpa CORS dan tanpa perlu membuka port service satu-satu.
+        # SetPath dipakai karena springdoc menyajikannya di /v3/api-docs, bukan di
+        # jalur /api-docs/* yang dipakai UI.
+        - id: docs-auth
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api-docs/auth
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: docs-workspace
+          uri: ${WORKSPACE_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api-docs/workspace
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: docs-project
+          uri: ${PROJECT_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api-docs/project
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: docs-integration
+          uri: ${INTEGRATION_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api-docs/integration
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: docs-billing
+          uri: ${BILLING_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api-docs/billing
+          filters:
+            - SetPath=/v3/api-docs
+        - id: notifications-internal-block
+          uri: http://localhost:${GATEWAY_SELF_PORT:8080}
+          predicates:
+            - Path=/api/v1/notifications/internal
+          filters:
+            - SetStatus=404
+
+        - id: auth-service
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            # /api/v1/media/** wajib ada di sini. Tanpa itu gateway tidak punya rute
+            # yang cocok dan unggahan gambar dibalas 404 — padahal endpoint-nya hidup
+            # dan benar di auth-service. Cacatnya tidak pernah terlihat saat diuji
+            # langsung ke port 8081; frontend memanggil lewat 8080.
+            - Path=/api/v1/auth/**, /api/v1/admin/**, /api/v1/media/**, /api/v1/notifications/**, /oauth2/**
+
+        - id: workspace-service
+          uri: ${WORKSPACE_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/workspaces/**, /api/v1/invitations/**
+
+        - id: project-service
+          uri: ${PROJECT_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/projects/**, /api/v1/tasks/**, /api/v1/milestones/**, /api/v1/comments/**, /api/v1/files/**, /api/v1/activities/**
+
+        - id: integration-service
+          uri: ${INTEGRATION_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/v1/integrations/**
+
+        - id: billing-service
+          uri: ${BILLING_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/billing/**, /api/v1/subscriptions/**, /api/xendit/webhook
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+logging:
+  pattern:
+    # %X{requestId} mengambil nilai yang dipasang RequestIdFilter. Tanpa ini id-nya
+    # ada di MDC tapi tidak pernah muncul di log, jadi tidak menolong siapa pun.
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
+
+# Swagger UI untuk seluruh backend, satu halaman, di port gateway.
+# Daftar di bawah yang memunculkan pemilih service di pojok kanan atas UI.
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    urls:
+      - name: 1. auth-service
+        url: /api-docs/auth
+      - name: 2. workspace-service
+        url: /api-docs/workspace
+      - name: 3. project-service
+        url: /api-docs/project
+      - name: 4. integration-service
+        url: /api-docs/integration
+      - name: 5. billing-service
+        url: /api-docs/billing
+  # api-docs TIDAK dimatikan: springdoc menyajikan /v3/api-docs/swagger-config dari
+  # autoconfig yang sama, dan Swagger UI wajib mengambil berkas itu sebelum bisa
+  # memuat daftar service. Mematikannya membuat UI-nya ikut hilang — 404 di semua
+  # jalur, tanpa pesan apa pun di log.
+  api-docs:
+    enabled: true

@@ -1,0 +1,192 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: yuu_saas
+      POSTGRES_USER: postgres
+      # Tanpa default: kalau .env belum disalin, compose berhenti dengan pesan jelas
+      # alih-alih diam-diam memakai password yang ter-commit di repo.
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?salin .env.example ke .env dan isi SPRING_DATASOURCE_PASSWORD}
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d yuu_saas"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: ../Dockerfile.backend
+    environment: &backend-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/yuu_saas
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?salin .env.example ke .env dan isi SPRING_DATASOURCE_PASSWORD}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      FRONTEND_URL: http://localhost:3000
+      APP_URL: http://localhost:3000
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      NOTIFICATION_INTERNAL_TOKEN: ${NOTIFICATION_INTERNAL_TOKEN:?NOTIFICATION_INTERNAL_TOKEN is required}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/oauth2/callback}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-http://localhost:3000/oauth2/callback}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?GITHUB_WEBHOOK_SECRET is required}
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  workspace-service:
+    build:
+      context: ./workspace-service
+      dockerfile: ../Dockerfile.backend
+    environment: *backend-env
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    # Tanpa ini, database yang BARU tidak pernah hidup.
+    #
+    # Tabel bersama dibuat migrasi Flyway milik auth-service, sementara service ini
+    # berjalan dengan `ddl-auto: validate` dan tidak memiliki migrasi sendiri. Keduanya
+    # hanya menunggu postgres sehat, bukan menunggu auth-service selesai bermigrasi —
+    # jadi pada database kosong service ini start lebih dulu, tidak menemukan tabelnya,
+    # dan mati dengan `Schema-validation: missing table`. Tanpa restart policy ia mati
+    # untuk selamanya, dan `docker compose up` di mesin baru menyisakan dua service
+    # tewas dari tujuh.
+    #
+    # Di mesin yang databasenya sudah terisi, ini tidak pernah terlihat: tabelnya
+    # terlanjur ada.
+    restart: unless-stopped
+
+  project-service:
+    build:
+      context: ./project-service
+      dockerfile: ../Dockerfile.backend
+    environment: *backend-env
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    # Tanpa ini, database yang BARU tidak pernah hidup.
+    #
+    # Tabel bersama dibuat migrasi Flyway milik auth-service, sementara service ini
+    # berjalan dengan `ddl-auto: validate` dan tidak memiliki migrasi sendiri. Keduanya
+    # hanya menunggu postgres sehat, bukan menunggu auth-service selesai bermigrasi —
+    # jadi pada database kosong service ini start lebih dulu, tidak menemukan tabelnya,
+    # dan mati dengan `Schema-validation: missing table`. Tanpa restart policy ia mati
+    # untuk selamanya, dan `docker compose up` di mesin baru menyisakan dua service
+    # tewas dari tujuh.
+    #
+    # Di mesin yang databasenya sudah terisi, ini tidak pernah terlihat: tabelnya
+    # terlanjur ada.
+    restart: unless-stopped
+
+  integration-service:
+    build:
+      context: ./integration-service
+      dockerfile: ../Dockerfile.backend
+    environment:
+      <<: *backend-env
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?GITHUB_WEBHOOK_SECRET is required}
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  billing-service:
+    build:
+      context: ./billing-service
+      dockerfile: ../Dockerfile.backend
+    environment:
+      <<: *backend-env
+      XENDIT_BASE_URL: ${XENDIT_BASE_URL:-https://api.xendit.co}
+      XENDIT_API_KEY: ${XENDIT_API_KEY:-}
+      XENDIT_CALLBACK_TOKEN: ${XENDIT_CALLBACK_TOKEN:?XENDIT_CALLBACK_TOKEN is required}
+      AUTH_SERVICE_URL: http://auth-service:8081
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: ../Dockerfile.backend
+    environment:
+      <<: *backend-env
+      AUTH_SERVICE_URL: http://auth-service:8081
+      NOTIFICATION_INTERNAL_TOKEN: ${NOTIFICATION_INTERNAL_TOKEN:?NOTIFICATION_INTERNAL_TOKEN is required}
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: ../Dockerfile.backend
+    environment:
+      GATEWAY_SELF_PORT: 8080
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      WORKSPACE_SERVICE_URL: http://workspace-service:8082
+      PROJECT_SERVICE_URL: http://project-service:8083
+      INTEGRATION_SERVICE_URL: http://integration-service:8084
+      BILLING_SERVICE_URL: http://billing-service:8085
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - workspace-service
+      - project-service
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+
+volumes:
+  postgres-data:
