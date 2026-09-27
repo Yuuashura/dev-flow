@@ -13,7 +13,7 @@ public class XenditWebhookController {
 
     private final BillingService billingService;
 
-    @PostMapping("/webhook")
+    @PostMapping({"/webhook", "/callback"})
     public ResponseEntity<Void> xenditWebhook(
             @RequestHeader(value = "x-callback-token", required = false) String callbackToken,
             @RequestBody XenditInvoiceCallback callback) {

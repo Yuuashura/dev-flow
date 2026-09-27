@@ -41,6 +41,7 @@ xendit:
   base-url: ${XENDIT_BASE_URL:https://api.xendit.co}
   api-key: ${XENDIT_API_KEY}
   callback-token: ${XENDIT_CALLBACK_TOKEN}
+  callback-url: ${XENDIT_CALLBACK_URL:}
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}

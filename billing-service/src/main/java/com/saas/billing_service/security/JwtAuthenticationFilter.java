@@ -29,8 +29,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return "/api/v1/billing/webhook".equals(request.getRequestURI())
-                || "/api/xendit/webhook".equals(request.getRequestURI());
+        String uri = request.getRequestURI();
+        return "/api/v1/billing/webhook".equals(uri)
+                || (uri != null && uri.startsWith("/api/xendit/"));
     }
 
     @Override

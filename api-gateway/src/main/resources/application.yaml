@@ -102,7 +102,7 @@ spring:
         - id: billing-service
           uri: ${BILLING_SERVICE_URL:http://localhost:8085}
           predicates:
-            - Path=/api/v1/billing/**, /api/v1/subscriptions/**, /api/xendit/webhook
+            - Path=/api/v1/billing/**, /api/v1/subscriptions/**, /api/xendit/**
 
 management:
   endpoints:

@@ -38,7 +38,7 @@ public class SecurityConfig {
                 }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/billing/plans", "/api/v1/billing/plans/*", "/actuator/health", "/error").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/billing/webhook", "/api/xendit/webhook").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/billing/webhook", "/api/xendit/**").permitAll()
                         // Spesifikasi OpenAPI diambil gateway untuk disajikan di
                         // Swagger UI. UI-nya hanya ada di gateway, jadi
                         // /swagger-ui/** sengaja TIDAK dibuka di sini.

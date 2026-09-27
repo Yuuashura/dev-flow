@@ -53,6 +53,9 @@ public class BillingService {
     @Value("${xendit.callback-token}")
     private String xenditCallbackToken;
 
+    @Value("${xendit.callback-url:}")
+    private String xenditCustomCallbackUrl;
+
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
 
@@ -205,6 +208,10 @@ public class BillingService {
         invoiceRequest.put("invoice_duration", 86400);
         invoiceRequest.put("success_redirect_url", billingUrl + "?payment=success&external_id=" + externalId);
         invoiceRequest.put("failure_redirect_url", billingUrl + "?payment=failed&external_id=" + externalId);
+        String webhookUrl = (xenditCustomCallbackUrl != null && !xenditCustomCallbackUrl.isBlank())
+                ? xenditCustomCallbackUrl
+                : (frontendUrl + "/api/xendit/webhook");
+        invoiceRequest.put("callback_url", webhookUrl);
         invoiceRequest.put("currency", proPlan.getCurrency());
         invoiceRequest.put("customer", customer);
         if (request.getCompanyName() != null && !request.getCompanyName().isBlank()) {
