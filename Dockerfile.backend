@@ -3,7 +3,14 @@ WORKDIR /app
 COPY .mvn .mvn
 COPY mvnw mvnw.cmd pom.xml ./
 COPY src src
-RUN chmod +x mvnw && ./mvnw -q -DskipTests package
+RUN --mount=type=cache,target=/root/.m2 \
+    chmod +x mvnw && \
+    ./mvnw -B -DskipTests \
+    -Dmaven.wagon.http.retryHandler.count=5 \
+    -Dmaven.wagon.http.retryHandler.requestSentKeepAliveRuntime=true \
+    -Dmaven.wagon.http.connectionTimeout=60000 \
+    -Dmaven.wagon.http.readTimeout=180000 \
+    package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
